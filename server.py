@@ -1,0 +1,100 @@
+from flask import Flask, request, jsonify,session
+from openai import OpenAI
+import base64
+import os
+from flask_cors import CORS
+import json
+
+
+app = Flask(__name__)
+CORS(app) 
+# app.secret_key = os.urandom(24)  
+
+
+UPLOAD_FOLDER = 'uploads/'
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+client = OpenAI(
+    api_key=os.environ.get("MOONSHOT_API_KEY"),
+    base_url="https://api.moonshot.cn/v1",
+)
+
+
+
+system_messages = [
+    {"role": "system", "content": ''' You are a Dermatologist Expert. Bold the words important words and then suggest three questions to ask for remedies. The user will choose one of this question and then you will respond accordingly. You provide safe, helpful, and accurate responses to users. These questions should be like suggestion questions that the users will ask to you and not the questions you ask to them. 
+    Please output your response in the following JSON format:
+  {
+    "message": "Result of analysis of the issue in a simple way for normal people",
+    "q1": "First question aboput remedy",
+    "q2": "Second Question",
+    "q3": "Third Question",
+
+   }
+   if the image is present add the following array key to the previous json format: {
+    issues:[{
+            "label": "name of the issue like acne, wrinkles, blackheads etc ",
+            "x": "x coordinate in the image",
+            "y": "y coordinate",
+            "width": "width of the issue",
+            "height": "height"
+        },]
+
+        note there could be multiple issues in same image so you need to show them all in this issues json array
+    '''},
+
+]
+
+@app.route('/api/upload-image', methods=['POST'])
+def upload_image():
+    global system_messages
+    messages = []
+
+    if 'image' in request.files:
+        file = request.files['image']
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        file.save(file_path)
+        with open(file_path, "rb") as f:
+            image_data = f.read()    
+        
+        os.remove(file_path)  
+
+        image_url = f"data:image/{os.path.splitext(file_path)[1]};base64,{base64.b64encode(image_data).decode('utf-8')}"
+
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": image_url}},
+                {"type": "text", "text": request.form.get("query") or " Identiy the issue in the skin from the image"},
+            ]
+        }]
+    else:
+         messages.append({
+        "role": "user",
+        "content": request.form.get("query")    
+    }) 
+
+
+    messages.extend(system_messages)
+    try:
+        completion = client.chat.completions.create(
+            model="moonshot-v1-8k-vision-preview",
+            messages= messages,
+            temperature=0.3,
+            response_format={"type": "json_object"}, 
+
+        )
+        assistant_message = completion.choices[0].message
+        content = json.loads(assistant_message.content)
+        print(content)
+        return jsonify({"messages": content })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=5000, debug=True)
