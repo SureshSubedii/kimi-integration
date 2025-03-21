@@ -44,10 +44,9 @@ system_messages = [
             "height": "height of the issue"
         },]
 
-        Calculate this x and y coordinate from the top left corner as in the screen coordinates
+        Calculate this x and y coordinate from the top left corner as in the screen coordinates.
 
-        note there could be multiple issues in same image so you need to show them all in this issues json array.
-        if the image is present and  the image is not clear or  the skin issue is difficult to identify due to this, ask the user to upload clear image and make sure you are absolutely correct and clear about your findings. 
+        note that there could be multiple issues in same image so you need to show them all in this issues json array. Do not analyse if the image is unclear and ask for clearer image if you are unsure about the diagnosis.
     '''},
 
 ]
